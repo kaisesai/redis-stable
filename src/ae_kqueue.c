@@ -68,14 +68,18 @@ static int aeApiCreate(aeEventLoop *eventLoop) {
         zfree(state);
         return -1;
     }
+    // 获取队列（IO多路复用技术）
     state->kqfd = kqueue();
     if (state->kqfd == -1) {
         zfree(state->events);
         zfree(state);
         return -1;
     }
+    // 执行系统调用，
     anetCloexec(state->kqfd);
+    // 分配掩码
     state->eventsMask = zmalloc(EVENT_MASK_MALLOC_SIZE(eventLoop->setsize));
+    // 设置内存
     memset(state->eventsMask, 0, EVENT_MASK_MALLOC_SIZE(eventLoop->setsize));
     eventLoop->apidata = state;
     return 0;

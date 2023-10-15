@@ -141,10 +141,12 @@ void bioInit(void) {
      * responsible for. */
     for (j = 0; j < BIO_WORKER_NUM; j++) {
         void *arg = (void*)(unsigned long) j;
+        // 创建线程  bioProcessBackgroundJobs
         if (pthread_create(&thread,&attr,bioProcessBackgroundJobs,arg) != 0) {
             serverLog(LL_WARNING, "Fatal: Can't initialize Background Jobs. Error message: %s", strerror(errno));
             exit(1);
         }
+        // 存储后台线程
         bio_threads[j] = thread;
     }
 }

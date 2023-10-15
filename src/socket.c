@@ -76,6 +76,7 @@ static ConnectionType CT_Socket;
 
 static connection *connCreateSocket(void) {
     connection *conn = zcalloc(sizeof(connection));
+    // 定义一个 监听 socket
     conn->type = &CT_Socket;
     conn->fd = -1;
     conn->iovcnt = IOV_MAX;
@@ -345,7 +346,9 @@ static int connSocketIsLocal(connection *conn) {
     return !strncmp(cip, "127.", 4) || !strcmp(cip, "::1");
 }
 
+// 连接 socket 监听
 static int connSocketListen(connListener *listener) {
+    // 监听端口
     return listenToPort(listener);
 }
 
@@ -389,6 +392,7 @@ static const char *connSocketGetType(connection *conn) {
     return CONN_TYPE_SOCKET;
 }
 
+// 连接类型 socket
 static ConnectionType CT_Socket = {
     /* connection type */
     .get_type = connSocketGetType,
@@ -403,6 +407,7 @@ static ConnectionType CT_Socket = {
     .accept_handler = connSocketAcceptHandler,
     .addr = connSocketAddr,
     .is_local = connSocketIsLocal,
+    // 监听函数
     .listen = connSocketListen,
 
     /* create/shutdown/close connection */

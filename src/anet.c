@@ -115,6 +115,7 @@ int anetCloexec(int fd) {
     int flags;
 
     do {
+        // 系统调用，获取文件描述符
         r = fcntl(fd, F_GETFD);
     } while (r == -1 && errno == EINTR);
 
@@ -124,6 +125,7 @@ int anetCloexec(int fd) {
     flags = r | FD_CLOEXEC;
 
     do {
+        // 设置文件描述符
         r = fcntl(fd, F_SETFD, flags);
     } while (r == -1 && errno == EINTR);
 

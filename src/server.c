@@ -2415,6 +2415,7 @@ int createSocketAcceptHandler(connListener *sfd, aeFileProc *accept_handler) {
     int j;
 
     for (j = 0; j < sfd->count; j++) {
+        // 创建文件事件
         if (aeCreateFileEvent(server.el, sfd->fd[j], AE_READABLE, accept_handler,sfd) == AE_ERR) {
             /* Rollback */
             for (j = j-1; j >= 0; j--) aeDeleteFileEvent(server.el, sfd->fd[j], AE_READABLE);
@@ -2479,7 +2480,9 @@ int listenToPort(connListener *sfd) {
             return C_ERR;
         }
         if (server.socket_mark_id > 0) anetSetSockMarkId(NULL, sfd->fd[sfd->count], server.socket_mark_id);
+        // 设置非阻塞 IO 
         anetNonBlock(NULL,sfd->fd[sfd->count]);
+        // 系统调用
         anetCloexec(sfd->fd[sfd->count]);
         sfd->count++;
     }
@@ -2619,6 +2622,7 @@ void initServer(void) {
     adjustOpenFilesLimit();
     const char *clk_msg = monotonicInit();
     serverLog(LL_NOTICE, "monotonic clock: %s", clk_msg);
+    // 创建一个 eventLoop 
     server.el = aeCreateEventLoop(server.maxclients+CONFIG_FDSET_INCR);
     if (server.el == NULL) {
         serverLog(LL_WARNING,
@@ -2626,6 +2630,7 @@ void initServer(void) {
             strerror(errno));
         exit(1);
     }
+    // 创建数据库对象
     server.db = zmalloc(sizeof(redisDb)*server.dbnum);
 
     /* Create the Redis databases, and initialize other internal state. */
@@ -2643,6 +2648,7 @@ void initServer(void) {
         server.db[j].slots_to_keys = NULL; /* Set by clusterInit later on if necessary. */
         listSetFreeMethod(server.db[j].defrag_later,(void (*)(void*))sdsfree);
     }
+    // 驱逐线程池
     evictionPoolAlloc(); /* Initialize the LRU keys pool. */
     server.pubsub_channels = dictCreate(&keylistDictType);
     server.pubsub_patterns = dictCreate(&keylistDictType);
@@ -2672,6 +2678,7 @@ void initServer(void) {
     server.rdb_last_load_keys_expired = 0;
     server.rdb_last_load_keys_loaded = 0;
     server.dirty = 0;
+    // 设置服务状态
     resetServerStats();
     /* A few stats we don't want to reset: server startup time, and peak mem. */
     server.stat_starttime = time(NULL);
@@ -2708,6 +2715,7 @@ void initServer(void) {
     /* Create the timer callback, this is our way to process many background
      * operations incrementally, like clients timeout, eviction of unaccessed
      * expired keys and so forth. */
+    // 创建时间回调事件
     if (aeCreateTimeEvent(server.el, 1, serverCron, NULL, NULL) == AE_ERR) {
         serverPanic("Can't create event loop timers.");
         exit(1);
@@ -2715,6 +2723,7 @@ void initServer(void) {
 
     /* Register a readable event for the pipe used to awake the event loop
      * from module threads. */
+    // 创建文件事件
     if (aeCreateFileEvent(server.el, server.module_pipe[0], AE_READABLE,
         modulePipeReadable,NULL) == AE_ERR) {
             serverPanic(
@@ -2723,7 +2732,9 @@ void initServer(void) {
 
     /* Register before and after sleep handlers (note this needs to be done
      * before loading persistence since it is used by processEventsWhileBlocked. */
+    // 设置sleep 前函数
     aeSetBeforeSleepProc(server.el,beforeSleep);
+    // 设置sleep 后函数
     aeSetAfterSleepProc(server.el,afterSleep);
 
     /* 32 bit instances are limited to 4GB of address space, so if there is
@@ -2744,12 +2755,14 @@ void initServer(void) {
     /* Initialize ACL default password if it exists */
     ACLUpdateDefaultUserPassword(server.requirepass);
 
+    // 应用看门狗
     applyWatchdogPeriod();
 
     if (server.maxmemory_clients != 0)
         initServerClientMemUsageBuckets();
 }
 
+// 初始化监听器
 void initListeners(void) {
     /* Setup listeners from server config for TCP/TLS/Unix */
     int conn_index;
@@ -2766,6 +2779,7 @@ void initListeners(void) {
     }
 
     if (server.tls_port || server.tls_replication || server.tls_cluster) {
+        // 监听类型，监听端口
         ConnectionType *ct_tls = connectionTypeTls();
         if (!ct_tls) {
             serverLog(LL_WARNING, "Failed finding TLS support.");
@@ -2805,11 +2819,13 @@ void initListeners(void) {
         if (listener->ct == NULL)
             continue;
 
+        // 连接
         if (connListen(listener) == C_ERR) {
             serverLog(LL_WARNING, "Failed listening on port %u (%s), aborting.", listener->port, listener->ct->get_type(NULL));
             exit(1);
         }
 
+        // 创建监听处理器
         if (createSocketAcceptHandler(listener, connAcceptHandler(listener->ct)) != C_OK)
             serverPanic("Unrecoverable error creating %s listener accept handler.", listener->ct->get_type(NULL));
 
@@ -2828,7 +2844,9 @@ void initListeners(void) {
  * Thread Local Storage initialization collides with dlopen call.
  * see: https://sourceware.org/bugzilla/show_bug.cgi?id=19329 */
 void InitServerLast(void) {
+    // 初始化后台线程
     bioInit();
+    // 初始化 IO 线程
     initThreadedIO();
     set_jemalloc_bg_thread(server.jemalloc_bg_thread);
     server.initial_memory_usage = zmalloc_used_memory();
@@ -7105,7 +7123,10 @@ int main(int argc, char **argv) {
     char *exec_name = strrchr(argv[0], '/');
     if (exec_name == NULL) exec_name = argv[0];
     server.sentinel_mode = checkForSentinelMode(argc,argv, exec_name);
+
+    // 初始化配置
     initServerConfig();
+
     ACLInit(); /* The ACL subsystem must be initialized ASAP because the
                   basic networking code and client creation depends on it. */
     moduleInitModulesSystem();
@@ -7297,6 +7318,7 @@ int main(int argc, char **argv) {
 
     // 初始化服务
     initServer();
+
     if (background || server.pidfile) createPidFile();
     if (server.set_proc_title) redisSetProcTitle(NULL);
     redisAsciiArt();
@@ -7309,6 +7331,8 @@ int main(int argc, char **argv) {
         moduleLoadFromQueue();
     }
     ACLLoadUsersAtStartup();
+    
+    // 初始化监听器
     initListeners();
     if (server.cluster_enabled) {
         clusterInitListeners();

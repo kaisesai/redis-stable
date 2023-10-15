@@ -429,6 +429,7 @@ int connTypeProcessPendingData(void);
 
 /* Listen on an initialized listener */
 static inline int connListen(connListener *listener) {
+    // 初始化连接器
     return listener->ct->listen(listener);
 }
 
