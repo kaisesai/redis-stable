@@ -181,6 +181,7 @@ static void _dictReset(dict *d, int htidx)
     d->ht_used[htidx] = 0;
 }
 
+// 创建一个hash表
 /* Create a new hash table */
 dict *dictCreate(dictType *type)
 {

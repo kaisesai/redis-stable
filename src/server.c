@@ -657,6 +657,7 @@ const char *strChildType(int type) {
 /* Return true if there are active children processes doing RDB saving,
  * AOF rewriting, or some side process spawned by a loaded module. */
 int hasActiveChildProcess(void) {
+    // 子进程id不等于-1
     return server.child_pid != -1;
 }
 
@@ -1010,7 +1011,7 @@ void clientsCron(void) {
     ClientsPeakMemInput[zeroidx] = 0;
     ClientsPeakMemOutput[zeroidx] = 0;
 
-
+    // 客户端处理
     while(listLength(server.clients) && iterations--) {
         client *c;
         listNode *head;
@@ -1062,6 +1063,7 @@ void databasesCron(void) {
     /* Perform hash tables rehashing if needed, but only if there are no
      * other processes saving the DB on disk. Otherwise rehashing is bad
      * as will cause a lot of copy-on-write of memory pages. */
+    // 是否有活跃的子进程
     if (!hasActiveChildProcess()) {
         /* We use global counters so if we stop the computation at a given
          * DB we'll be able to start from the successive in the next
@@ -1080,7 +1082,7 @@ void databasesCron(void) {
             resize_db++;
         }
 
-        /* Rehash */
+        /* Rehash 操作 */
         if (server.activerehashing) {
             for (j = 0; j < dbs_per_call; j++) {
                 int work_done = incrementallyRehash(rehash_db);
@@ -1265,12 +1267,16 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
 
     /* Software watchdog: deliver the SIGALRM that will reach the signal
      * handler if we don't return here fast enough. */
+    // 看门狗调度信号
     if (server.watchdog_period) watchdogScheduleSignal(server.watchdog_period);
 
+    // 频率单位：赫兹
     server.hz = server.config_hz;
     /* Adapt the server.hz value to the number of configured clients. If we have
      * many clients, we want to call serverCron() with an higher frequency. */
+    // 动态调节频率单位
     if (server.dynamic_hz) {
+        // 客户端数量/频率 > 200
         while (listLength(server.clients) / server.hz >
                MAX_CLIENTS_PER_CLOCK_TICK)
         {
@@ -1322,6 +1328,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
      *
      * Note that you can change the resolution altering the
      * LRU_CLOCK_RESOLUTION define. */
+    // lru时钟
     server.lruclock = getLRUClock();
 
     cronUpdateMemoryStats();
@@ -1334,7 +1341,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
             shutdownFlags = server.shutdown_on_sigint;
         else if (server.last_sig_received == SIGTERM && server.shutdown_on_sigterm)
             shutdownFlags = server.shutdown_on_sigterm;
-
+        // 停止程序
         if (prepareForShutdown(shutdownFlags) == C_OK) exit(0);
     } else if (isShutdownInitiated()) {
         if (server.mstime >= server.shutdown_mstime || isReadyToShutdown()) {
@@ -1371,24 +1378,31 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
     }
 
     /* We need to do a few operations on clients asynchronously. */
+    // 客户端连接
     clientsCron();
 
+    // 数据库连接
     /* Handle background operations on Redis databases. */
     databasesCron();
 
     /* Start a scheduled AOF rewrite if this was requested by the user while
      * a BGSAVE was in progress. */
+    // 如果有用户进行 bgsave 操作，则启用 aof重写操作，
     if (!hasActiveChildProcess() &&
         server.aof_rewrite_scheduled &&
         !aofRewriteLimited())
     {
+        // aof操作
         rewriteAppendOnlyFileBackground();
     }
 
+    // 检查子进程
     /* Check if a background saving or AOF rewrite in progress terminated. */
     if (hasActiveChildProcess() || ldbPendingChildren())
     {
+        // 接受子进程信息
         run_with_period(1000) receiveChildInfo();
+        // 检查子进程是否结束
         checkChildrenDone();
     } else {
         /* If there is not a background saving/rewrite in progress check if
@@ -1408,13 +1422,16 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
             {
                 serverLog(LL_NOTICE,"%d changes in %d seconds. Saving...",
                     sp->changes, (int)sp->seconds);
+                // 保存rdb信息
                 rdbSaveInfo rsi, *rsiptr;
                 rsiptr = rdbPopulateSaveInfo(&rsi);
+                // 后台执行rdb
                 rdbSaveBackground(SLAVE_REQ_NONE,server.rdb_filename,rsiptr,RDBFLAGS_NONE);
                 break;
             }
         }
 
+        // AOF操作
         /* Trigger an AOF rewrite if needed. */
         if (server.aof_state == AOF_ON &&
             !hasActiveChildProcess() &&
@@ -1426,12 +1443,14 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
             long long growth = (server.aof_current_size*100/base) - 100;
             if (growth >= server.aof_rewrite_perc && !aofRewriteLimited()) {
                 serverLog(LL_NOTICE,"Starting automatic rewriting of AOF on %lld%% growth",growth);
+                // AOF操作
                 rewriteAppendOnlyFileBackground();
             }
         }
     }
     /* Just for the sake of defensive programming, to avoid forgetting to
      * call this function when needed. */
+    // 更新字典重置大小策略
     updateDictResizePolicy();
 
 
@@ -1440,6 +1459,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
     if ((server.aof_state == AOF_ON || server.aof_state == AOF_WAIT_REWRITE) &&
         server.aof_flush_postponed_start)
     {
+        // 刷新AOF文件
         flushAppendOnlyFile(0);
     }
 
@@ -1471,6 +1491,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
 
     /* Run the Redis Cluster cron. */
     run_with_period(100) {
+        // 集群操作
         if (server.cluster_enabled) clusterCron();
     }
 
@@ -1819,6 +1840,7 @@ void afterSleep(struct aeEventLoop *eventLoop) {
 
 /* =========================== Server initialization ======================== */
 
+// 创建共享对象
 void createSharedObjects(void) {
     int j;
 
@@ -2272,6 +2294,7 @@ int setOOMScoreAdj(int process_class) {
  * If it will not be possible to set the limit accordingly to the configured
  * max number of clients, the function will do the reverse setting
  * server.maxclients to the value that we can actually handle. */
+// 调整文件的打开限制
 void adjustOpenFilesLimit(void) {
     rlim_t maxfiles = server.maxclients+CONFIG_MIN_RESERVED_FDS;
     struct rlimit limit;
@@ -2558,12 +2581,15 @@ void makeThreadKillable(void) {
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 }
 
+// redis server 初始化
 void initServer(void) {
     int j;
-
+    // 信号量
     signal(SIGHUP, SIG_IGN);
     signal(SIGPIPE, SIG_IGN);
+    // 设置信号处理器
     setupSignalHandlers();
+    // 线程可kill
     makeThreadKillable();
 
     if (server.syslog_enabled) {
@@ -2575,18 +2601,24 @@ void initServer(void) {
     server.aof_state = server.aof_enabled ? AOF_ON : AOF_OFF;
     server.fsynced_reploff = server.aof_enabled ? 0 : -1;
     server.hz = server.config_hz;
+    // 进程ID
     server.pid = getpid();
     server.in_fork_child = CHILD_TYPE_NONE;
     server.main_thread_id = pthread_self();
     server.current_client = NULL;
     server.errors = raxNew();
     server.execution_nesting = 0;
+    // 客户端
     server.clients = listCreate();
     server.clients_index = raxNew();
     server.clients_to_close = listCreate();
+    // 从节点
     server.slaves = listCreate();
+    // 监控器
     server.monitors = listCreate();
+    // 客户端等待写处理
     server.clients_pending_write = listCreate();
+    // 客户端等待读处理
     server.clients_pending_read = listCreate();
     server.clients_timeout_table = raxNew();
     server.replication_allowed = 1;
@@ -2610,6 +2642,7 @@ void initServer(void) {
     server.reply_buffer_peak_reset_time = REPLY_BUFFER_DEFAULT_PEAK_RESET_TIME;
     server.reply_buffer_resizing_enabled = 1;
     server.client_mem_usage_buckets = NULL;
+    // 重置响应缓冲区
     resetReplicationBuffer();
 
     /* Make sure the locale is set on startup based on the config file. */
@@ -2618,11 +2651,15 @@ void initServer(void) {
         exit(1);
     }
 
+    // 创建共享对象
     createSharedObjects();
+    // 判断打开文件数量
     adjustOpenFilesLimit();
+
     const char *clk_msg = monotonicInit();
     serverLog(LL_NOTICE, "monotonic clock: %s", clk_msg);
-    // 创建一个 eventLoop 
+
+    // 创建一个 eventLoop （非常重要）
     server.el = aeCreateEventLoop(server.maxclients+CONFIG_FDSET_INCR);
     if (server.el == NULL) {
         serverLog(LL_WARNING,
@@ -2633,8 +2670,10 @@ void initServer(void) {
     // 创建数据库对象
     server.db = zmalloc(sizeof(redisDb)*server.dbnum);
 
+    // 创建数据库
     /* Create the Redis databases, and initialize other internal state. */
     for (j = 0; j < server.dbnum; j++) {
+        // 字典
         server.db[j].dict = dictCreate(&dbDictType);
         server.db[j].expires = dictCreate(&dbExpiresDictType);
         server.db[j].expires_cursor = 0;
@@ -2650,6 +2689,7 @@ void initServer(void) {
     }
     // 驱逐线程池
     evictionPoolAlloc(); /* Initialize the LRU keys pool. */
+    // 发布订阅对象
     server.pubsub_channels = dictCreate(&keylistDictType);
     server.pubsub_patterns = dictCreate(&keylistDictType);
     server.pubsubshard_channels = dictCreate(&keylistDictType);
@@ -2723,7 +2763,7 @@ void initServer(void) {
 
     /* Register a readable event for the pipe used to awake the event loop
      * from module threads. */
-    // 创建文件事件
+    // 创建文件事件，模块管道
     if (aeCreateFileEvent(server.el, server.module_pipe[0], AE_READABLE,
         modulePipeReadable,NULL) == AE_ERR) {
             serverPanic(
@@ -4274,7 +4314,7 @@ int prepareForShutdown(int flags) {
         serverLog(LL_NOTICE, "Waiting for replicas before shutting down.");
         return C_ERR;
     }
-
+    // 完成停机
     return finishShutdown();
 }
 
@@ -6361,11 +6401,13 @@ void linuxMemoryWarnings(void) {
 }
 #endif /* __linux__ */
 
+// 创建进程文件
 void createPidFile(void) {
     /* If pidfile requested, but no pidfile defined, use
      * default pidfile path */
     if (!server.pidfile) server.pidfile = zstrdup(CONFIG_DEFAULT_PID_FILE);
 
+    // 打开文件
     /* Try to write the pid file in a best-effort way. */
     FILE *fp = fopen(server.pidfile,"w");
     if (fp) {
@@ -6385,6 +6427,7 @@ void daemonize(void) {
     /* Every output goes to /dev/null. If Redis is daemonized but
      * the 'logfile' is set to 'stdout' in the configuration file
      * it will not log at all. */
+    // 打开文件
     if ((fd = open("/dev/null", O_RDWR, 0)) != -1) {
         dup2(fd, STDIN_FILENO);
         dup2(fd, STDOUT_FILENO);
@@ -6529,6 +6572,7 @@ static void sigShutdownHandler(int sig) {
     server.last_sig_received = sig;
 }
 
+// 信号量处理器
 void setupSignalHandlers(void) {
     struct sigaction act;
 
@@ -6615,6 +6659,7 @@ int redisFork(int purpose) {
 
     int childpid;
     long long start = ustime();
+    // fork出一个子进程
     if ((childpid = fork()) == 0) {
         /* Child.
          *
@@ -7264,6 +7309,7 @@ int main(int argc, char **argv) {
             j++;
         }
 
+        // 加载服务配置
         loadServerConfig(server.configfile, config_from_stdin, options);
         if (server.sentinel_mode) loadSentinelConfigFromQueue();
         sdsfree(options);
@@ -7297,8 +7343,10 @@ int main(int argc, char **argv) {
 #endif /* __linux__ */
 
     /* Daemonize if needed */
+    // 后台守护模式
     server.supervised = redisIsSupervised(server.supervised_mode);
     int background = server.daemonize && !server.supervised;
+    // 后台启动
     if (background) daemonize();
 
     serverLog(LL_NOTICE, "oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo");
@@ -7319,22 +7367,28 @@ int main(int argc, char **argv) {
     // 初始化服务
     initServer();
 
+    // 创建后台进程id
     if (background || server.pidfile) createPidFile();
+
     if (server.set_proc_title) redisSetProcTitle(NULL);
     redisAsciiArt();
     checkTcpBacklogSettings();
     if (server.cluster_enabled) {
+        // 集群初始化
         clusterInit();
     }
     if (!server.sentinel_mode) {
+        // 哨兵模式
         moduleInitModulesSystemLast();
         moduleLoadFromQueue();
     }
+    // acl权限控制
     ACLLoadUsersAtStartup();
     
     // 初始化监听器
     initListeners();
     if (server.cluster_enabled) {
+        // 集群监听器
         clusterInitListeners();
     }
 
@@ -7344,8 +7398,11 @@ int main(int argc, char **argv) {
     if (!server.sentinel_mode) {
         /* Things not needed when running in Sentinel mode. */
         serverLog(LL_NOTICE,"Server initialized");
+        // aof 加载主文件
         aofLoadManifestFromDisk();
+        // 从磁盘加载数据
         loadDataFromDisk();
+        // aof代开
         aofOpenIfNeededOnServerStart();
         aofDelHistoryFiles();
         if (server.cluster_enabled) {
@@ -7384,7 +7441,9 @@ int main(int argc, char **argv) {
     redisSetCpuAffinity(server.server_cpulist);
     setOOMScoreAdj(-1);
 
+    // 启动 eventLoop
     aeMain(server.el);
+    // 删除 eventLoop
     aeDeleteEventLoop(server.el);
     return 0;
 }

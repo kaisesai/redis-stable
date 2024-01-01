@@ -108,6 +108,7 @@ void rdbReportError(int corruption_error, int linenum, char *reason, ...) {
 }
 
 ssize_t rdbWriteRaw(rio *rdb, void *p, size_t len) {
+    // rdb 写操作
     if (rdb && rioWrite(rdb,p,len) == 0)
         return -1;
     return len;
@@ -1152,9 +1153,12 @@ int rdbSaveKeyValuePair(rio *rdb, robj *key, robj *val, long long expiretime, in
         if (rdbWriteRaw(rdb,buf,1) == -1) return -1;
     }
 
+    // 保存key value
     /* Save type, key, value */
     if (rdbSaveObjectType(rdb,val) == -1) return -1;
+    // 保存字符串
     if (rdbSaveStringObject(rdb,key) == -1) return -1;
+    // 保存对象
     if (rdbSaveObject(rdb,val,key,dbid) == -1) return -1;
 
     /* Delay return if required (for testing) */
@@ -1278,14 +1282,17 @@ error:
 
 ssize_t rdbSaveFunctions(rio *rdb) {
     dict *functions = functionsLibGet();
+    // 函数数据
     dictIterator *iter = dictGetIterator(functions);
     dictEntry *entry = NULL;
     ssize_t written = 0;
     ssize_t ret;
     while ((entry = dictNext(iter))) {
+        // 保存类型
         if ((ret = rdbSaveType(rdb, RDB_OPCODE_FUNCTION2)) < 0) goto werr;
         written += ret;
         functionLibInfo *li = dictGetVal(entry);
+        // 保存字符串
         if ((ret = rdbSaveRawString(rdb, (unsigned char *) li->code, sdslen(li->code))) < 0) goto werr;
         written += ret;
     }
@@ -1351,6 +1358,7 @@ ssize_t rdbSaveDb(rio *rdb, int dbid, int rdbflags, long *key_counter) {
         if (((*key_counter)++ & 1023) == 0) {
             long long now = mstime();
             if (now - info_updated_time >= 1000) {
+                // 发送子进程信息
                 sendChildInfo(CHILD_INFO_TYPE_CURRENT_INFO, *key_counter, pname);
                 info_updated_time = now;
             }
@@ -1373,6 +1381,7 @@ werr:
  * When the function returns C_ERR and if 'error' is not NULL, the
  * integer pointed by 'error' is set to the value of errno just after the I/O
  * error. */
+// 执行保存
 int rdbSaveRio(int req, rio *rdb, int *error, int rdbflags, rdbSaveInfo *rsi) {
     char magic[10];
     uint64_t cksum;
@@ -1382,16 +1391,21 @@ int rdbSaveRio(int req, rio *rdb, int *error, int rdbflags, rdbSaveInfo *rsi) {
     if (server.rdb_checksum)
         rdb->update_cksum = rioGenericUpdateChecksum;
     snprintf(magic,sizeof(magic),"REDIS%04d",RDB_VERSION);
+    // 写入原始数据
     if (rdbWriteRaw(rdb,magic,9) == -1) goto werr;
+    // 自动修复文件
     if (rdbSaveInfoAuxFields(rdb,rdbflags,rsi) == -1) goto werr;
     if (!(req & SLAVE_REQ_RDB_EXCLUDE_DATA) && rdbSaveModulesAux(rdb, REDISMODULE_AUX_BEFORE_RDB) == -1) goto werr;
 
+    // 保存函数
     /* save functions */
     if (!(req & SLAVE_REQ_RDB_EXCLUDE_FUNCTIONS) && rdbSaveFunctions(rdb) == -1) goto werr;
 
+    // 保存数据库
     /* save all databases, skip this if we're in functions-only mode */
     if (!(req & SLAVE_REQ_RDB_EXCLUDE_DATA)) {
         for (j = 0; j < server.dbnum; j++) {
+            // 保存数据库
             if (rdbSaveDb(rdb, j, rdbflags, &key_counter) == -1) goto werr;
         }
     }
@@ -1442,6 +1456,7 @@ werr: /* Write error. */
     return C_ERR;
 }
 
+// 执行内部保存
 static int rdbSaveInternal(int req, const char *filename, rdbSaveInfo *rsi, int rdbflags) {
     char cwd[MAXPATHLEN]; /* Current working dir path for error messages. */
     rio rdb;
@@ -1449,6 +1464,7 @@ static int rdbSaveInternal(int req, const char *filename, rdbSaveInfo *rsi, int 
     int saved_errno;
     char *err_op;    /* For a detailed log */
 
+    // 打开文件
     FILE *fp = fopen(filename,"w");
     if (!fp) {
         saved_errno = errno;
@@ -1464,6 +1480,7 @@ static int rdbSaveInternal(int req, const char *filename, rdbSaveInfo *rsi, int 
         return C_ERR;
     }
 
+    // 初始化
     rioInitWithFile(&rdb,fp);
 
     if (server.rdb_save_incremental_fsync) {
@@ -1471,6 +1488,7 @@ static int rdbSaveInternal(int req, const char *filename, rdbSaveInfo *rsi, int 
         if (!(rdbflags & RDBFLAGS_KEEP_CACHE)) rioSetReclaimCache(&rdb,1);
     }
 
+    // 保存
     if (rdbSaveRio(req,&rdb,&error,rdbflags,rsi) == C_ERR) {
         errno = error;
         err_op = "rdbSaveRio";
@@ -1498,6 +1516,7 @@ werr:
 
 /* Save DB to the file. Similar to rdbSave() but this function won't use a
  * temporary file and won't update the metrics. */
+// 保存rbd到文件
 int rdbSaveToFile(const char *filename) {
     startSaving(RDBFLAGS_NONE);
 
@@ -1513,10 +1532,12 @@ int rdbSaveToFile(const char *filename) {
 }
 
 /* Save the DB on disk. Return C_ERR on error, C_OK on success. */
+// 保存数据到磁盘，bgsave
 int rdbSave(int req, char *filename, rdbSaveInfo *rsi, int rdbflags) {
     char tmpfile[256];
     char cwd[MAXPATHLEN]; /* Current working dir path for error messages. */
 
+    // 开始操作
     startSaving(RDBFLAGS_NONE);
     snprintf(tmpfile,256,"temp-%d.rdb", (int) getpid());
 
@@ -1556,6 +1577,7 @@ int rdbSave(int req, char *filename, rdbSaveInfo *rsi, int rdbflags) {
     return C_OK;
 }
 
+// 后台执行rdbsave操作
 int rdbSaveBackground(int req, char *filename, rdbSaveInfo *rsi, int rdbflags) {
     pid_t childpid;
 
@@ -1565,12 +1587,14 @@ int rdbSaveBackground(int req, char *filename, rdbSaveInfo *rsi, int rdbflags) {
     server.dirty_before_bgsave = server.dirty;
     server.lastbgsave_try = time(NULL);
 
+    // fork子进程
     if ((childpid = redisFork(CHILD_TYPE_RDB)) == 0) {
         int retval;
 
         /* Child */
         redisSetProcTitle("redis-rdb-bgsave");
         redisSetCpuAffinity(server.bgsave_cpulist);
+        // 执行 save
         retval = rdbSave(req, filename,rsi,rdbflags);
         if (retval == C_OK) {
             sendChildCowInfo(CHILD_INFO_TYPE_RDB_COW_SIZE, "RDB");

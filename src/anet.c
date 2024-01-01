@@ -110,6 +110,7 @@ int anetBlock(char *err, int fd) {
 /* Enable the FD_CLOEXEC on the given fd to avoid fd leaks. 
  * This function should be invoked for fd's on specific places 
  * where fork + execve system calls are called. */
+ // 系统调用
 int anetCloexec(int fd) {
     int r;
     int flags;

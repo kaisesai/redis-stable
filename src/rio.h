@@ -111,6 +111,7 @@ static inline size_t rioWrite(rio *r, const void *buf, size_t len) {
     while (len) {
         size_t bytes_to_write = (r->max_processing_chunk && r->max_processing_chunk < len) ? r->max_processing_chunk : len;
         if (r->update_cksum) r->update_cksum(r,buf,bytes_to_write);
+        // 写入操作
         if (r->write(r,buf,bytes_to_write) == 0) {
             r->flags |= RIO_FLAG_WRITE_ERROR;
             return 0;

@@ -2132,6 +2132,7 @@ void unprotectClient(client *c) {
  * have a well formed command. The function also returns C_ERR when there is
  * a protocol error: in such a case the client structure is setup to reply
  * with the error and close the connection. */
+// 处理缓存素具
 int processInlineBuffer(client *c) {
     char *newline;
     int argc, j, linefeed_chars = 1;
@@ -2517,6 +2518,7 @@ int processPendingCommandAndInputBuffer(client *c) {
  * or because a client was blocked and later reactivated, so there could be
  * pending query buffer, already representing a full command, to process.
  * return C_ERR in case the client was freed during the processing */
+// 处理缓存数据
 int processInputBuffer(client *c) {
     /* Keep processing while there is something in the input buffer */
     while(c->qb_pos < sdslen(c->querybuf)) {
@@ -2559,18 +2561,21 @@ int processInputBuffer(client *c) {
 
         /* Multibulk processing could see a <= 0 length. */
         if (c->argc == 0) {
+            // 重置客户端
             resetClient(c);
         } else {
             /* If we are in the context of an I/O thread, we can't really
              * execute the command here. All we can do is to flag the client
              * as one that needs to process the command. */
             if (io_threads_op != IO_THREADS_OP_IDLE) {
+                // 断言
                 serverAssert(io_threads_op == IO_THREADS_OP_READ);
                 c->flags |= CLIENT_PENDING_COMMAND;
                 break;
             }
 
             /* We are finally ready to execute the command. */
+            // 读取命令
             if (processCommandAndResetClient(c) == C_ERR) {
                 /* If the client is no longer valid, we avoid exiting this
                  * loop and trimming the client buffer later. So we return
@@ -2608,6 +2613,7 @@ int processInputBuffer(client *c) {
      * important in case the query buffer is big and wasn't drained during
      * the above loop (because of partially sent big commands). */
     if (io_threads_op == IO_THREADS_OP_IDLE)
+        // 更新客户端内存使用和桶
         updateClientMemUsageAndBucket(c);
 
     return C_OK;
@@ -2615,6 +2621,7 @@ int processInputBuffer(client *c) {
 
 // 从客户端上读取数据
 void readQueryFromClient(connection *conn) {
+    // 客户端
     client *c = connGetPrivateData(conn);
     int nread, big_arg = 0;
     size_t qblen, readlen;
@@ -2667,6 +2674,7 @@ void readQueryFromClient(connection *conn) {
         /* Read as much as possible from the socket to save read(2) system calls. */
         readlen = sdsavail(c->querybuf);
     }
+    // 读取数据
     nread = connRead(c->conn, c->querybuf+qblen, readlen);
     if (nread == -1) {
         if (connGetState(conn) == CONN_STATE_CONNECTED) {
@@ -4477,6 +4485,7 @@ int handleClientsWithPendingReadsUsingThreads(void) {
     listRewind(io_threads_list[0],&li);
     while((ln = listNext(&li))) {
         client *c = listNodeValue(ln);
+        // 从连接上读取数据
         readQueryFromClient(c->conn);
     }
     listEmpty(io_threads_list[0]);

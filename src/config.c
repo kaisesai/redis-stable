@@ -444,6 +444,7 @@ static int updateClientOutputBufferLimit(sds *args, int arg_len, const char **er
  * abnormal aggregate `save T C` functionality. Remove in the future. */
 static int reading_config_file;
 
+// 加载服务配置
 void loadServerConfigFromString(char *config) {
     deprecatedConfig deprecated_configs[] = {
         {"list-max-ziplist-entries", 2, 2},
@@ -652,6 +653,8 @@ loaderr:
  * empty. This way loadServerConfig can be used to just load a file or
  * just load a string. */
 #define CONFIG_READ_LEN 1024
+
+// 加载服务配置数据
 void loadServerConfig(char *filename, char config_from_stdin, char *options) {
     sds config = sdsempty();
     char buf[CONFIG_READ_LEN+1];
@@ -680,17 +683,21 @@ void loadServerConfig(char *filename, char config_from_stdin, char *options) {
             if (glob(filename, 0, NULL, &globbuf) == 0) {
 
                 for (size_t i = 0; i < globbuf.gl_pathc; i++) {
+                    // 打开文件
                     if ((fp = fopen(globbuf.gl_pathv[i], "r")) == NULL) {
                         serverLog(LL_WARNING,
                                   "Fatal error, can't open config file '%s': %s",
                                   globbuf.gl_pathv[i], strerror(errno));
                         exit(1);
                     }
+                    // 从文件描述符中读取数据
                     while(fgets(buf,CONFIG_READ_LEN+1,fp) != NULL)
+                        // 读取配置到 config 对象上
                         config = sdscat(config,buf);
+                    // 关闭文件
                     fclose(fp);
                 }
-
+                // 释放空间
                 globfree(&globbuf);
             }
         } else {
@@ -721,6 +728,7 @@ void loadServerConfig(char *filename, char config_from_stdin, char *options) {
         config = sdscat(config,"\n");
         config = sdscat(config,options);
     }
+    // 从字符串上加载服务配置
     loadServerConfigFromString(config);
     sdsfree(config);
 }

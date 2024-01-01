@@ -36,6 +36,7 @@ typedef struct aeApiState {
     struct epoll_event *events;
 } aeApiState;
 
+// linux 系统的 epoll 处理器
 static int aeApiCreate(aeEventLoop *eventLoop) {
     aeApiState *state = zmalloc(sizeof(aeApiState));
 
@@ -45,6 +46,7 @@ static int aeApiCreate(aeEventLoop *eventLoop) {
         zfree(state);
         return -1;
     }
+    // 创建 epoll 文件描述符
     state->epfd = epoll_create(1024); /* 1024 is just a hint for the kernel */
     if (state->epfd == -1) {
         zfree(state->events);

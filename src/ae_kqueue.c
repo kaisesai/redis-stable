@@ -59,6 +59,7 @@ static inline void resetEventMask(char *eventsMask, int fd) {
     eventsMask[fd/4] &= ~EVENT_MASK_ENCODE(fd, 0x3);
 }
 
+// 创建多路复用器
 static int aeApiCreate(aeEventLoop *eventLoop) {
     aeApiState *state = zmalloc(sizeof(aeApiState));
 
@@ -68,7 +69,7 @@ static int aeApiCreate(aeEventLoop *eventLoop) {
         zfree(state);
         return -1;
     }
-    // 获取队列（IO多路复用技术）
+    // mac操作系统获取队列（IO多路复用技术），Linux系统获取的是 epoll 
     state->kqfd = kqueue();
     if (state->kqfd == -1) {
         zfree(state->events);
@@ -81,6 +82,7 @@ static int aeApiCreate(aeEventLoop *eventLoop) {
     state->eventsMask = zmalloc(EVENT_MASK_MALLOC_SIZE(eventLoop->setsize));
     // 设置内存
     memset(state->eventsMask, 0, EVENT_MASK_MALLOC_SIZE(eventLoop->setsize));
+    // 设置 eventLoop的 api数据
     eventLoop->apidata = state;
     return 0;
 }
@@ -103,6 +105,7 @@ static void aeApiFree(aeEventLoop *eventLoop) {
     zfree(state);
 }
 
+// 添加事件
 static int aeApiAddEvent(aeEventLoop *eventLoop, int fd, int mask) {
     aeApiState *state = eventLoop->apidata;
     struct kevent ke;

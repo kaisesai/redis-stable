@@ -63,7 +63,7 @@
     #endif
 #endif
 
-
+// 创建一个 eventLoop
 aeEventLoop *aeCreateEventLoop(int setsize) {
     aeEventLoop *eventLoop;
     int i;
@@ -71,9 +71,12 @@ aeEventLoop *aeCreateEventLoop(int setsize) {
     monotonicInit();    /* just in case the calling app didn't initialize */
 
     if ((eventLoop = zmalloc(sizeof(*eventLoop))) == NULL) goto err;
+    // 分配内存:事件
     eventLoop->events = zmalloc(sizeof(aeFileEvent)*setsize);
+    // 分配内存:fired点火
     eventLoop->fired = zmalloc(sizeof(aeFiredEvent)*setsize);
     if (eventLoop->events == NULL || eventLoop->fired == NULL) goto err;
+    // 初始化属性
     eventLoop->setsize = setsize;
     eventLoop->timeEventHead = NULL;
     eventLoop->timeEventNextId = 0;
@@ -87,6 +90,7 @@ aeEventLoop *aeCreateEventLoop(int setsize) {
     /* Events with mask == AE_NONE are not set. So let's initialize the
      * vector with it. */
     for (i = 0; i < setsize; i++)
+        // 设置每个事件的掩码为 none
         eventLoop->events[i].mask = AE_NONE;
     return eventLoop;
 
@@ -160,7 +164,7 @@ void aeStop(aeEventLoop *eventLoop) {
     eventLoop->stop = 1;
 }
 
-// 文件事件
+// 创建文件事件
 int aeCreateFileEvent(aeEventLoop *eventLoop, int fd, int mask,
         aeFileProc *proc, void *clientData)
 {
@@ -225,6 +229,7 @@ long long aeCreateTimeEvent(aeEventLoop *eventLoop, long long milliseconds,
         aeTimeProc *proc, void *clientData,
         aeEventFinalizerProc *finalizerProc)
 {
+    // 时间事件数量加一
     long long id = eventLoop->timeEventNextId++;
     aeTimeEvent *te;
 
@@ -495,9 +500,12 @@ int aeWait(int fd, int mask, long long milliseconds) {
     }
 }
 
+// 事件循环器
 void aeMain(aeEventLoop *eventLoop) {
     eventLoop->stop = 0;
+    // 循环
     while (!eventLoop->stop) {
+        // 处理事件:接受:全部事件/前置睡眠事件/后置睡眠事件
         aeProcessEvents(eventLoop, AE_ALL_EVENTS|
                                    AE_CALL_BEFORE_SLEEP|
                                    AE_CALL_AFTER_SLEEP);

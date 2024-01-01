@@ -58,6 +58,7 @@ static inline int sdsHdrSize(char type) {
     return 0;
 }
 
+// 根据字符串长度定义sds的类型
 static inline char sdsReqType(size_t string_size) {
     if (string_size < 1<<5)
         return SDS_TYPE_5;
@@ -88,6 +89,7 @@ static inline size_t sdsTypeMaxSize(char type) {
     return -1; /* this is equivalent to the max SDS_TYPE_64 or SDS_TYPE_32 */
 }
 
+// 创建一个 sds 的字符串
 /* Create a new sds string with the content specified by the 'init' pointer
  * and 'initlen'.
  * If NULL is used for 'init' the string is initialized with zero bytes.

@@ -916,6 +916,7 @@ int aofFsyncInProgress(void) {
     /* Note that we don't care about aof_background_fsync_and_close because
      * server.aof_fd has been replaced by the new INCR AOF file fd,
      * see openNewIncrAofForAppend. */
+    // BIO 阻塞
     return bioPendingJobsOfType(BIO_AOF_FSYNC) != 0;
 }
 
@@ -1039,6 +1040,7 @@ ssize_t aofWrite(int fd, const char *buf, size_t len) {
     ssize_t nwritten = 0, totwritten = 0;
 
     while(len) {
+        // 写操作
         nwritten = write(fd, buf, len);
 
         if (nwritten < 0) {
@@ -1050,7 +1052,7 @@ ssize_t aofWrite(int fd, const char *buf, size_t len) {
         buf += nwritten;
         totwritten += nwritten;
     }
-
+    // 总写入数量
     return totwritten;
 }
 
@@ -1073,6 +1075,8 @@ ssize_t aofWrite(int fd, const char *buf, size_t len) {
  * However if force is set to 1 we'll write regardless of the background
  * fsync. */
 #define AOF_WRITE_LOG_ERROR_RATE 30 /* Seconds between errors logging. */
+
+// 刷新AOF文件
 void flushAppendOnlyFile(int force) {
     ssize_t nwritten;
     int sync_in_progress = 0;
@@ -1103,6 +1107,7 @@ void flushAppendOnlyFile(int force) {
         }
     }
 
+    // aof同步进程
     if (server.aof_fsync == AOF_FSYNC_EVERYSEC)
         sync_in_progress = aofFsyncInProgress();
 
@@ -1138,6 +1143,7 @@ void flushAppendOnlyFile(int force) {
     }
 
     latencyStartMonitor(latency);
+    // 执行 aof 写操作
     nwritten = aofWrite(server.aof_fd,server.aof_buf,sdslen(server.aof_buf));
     latencyEndMonitor(latency);
     /* We want to capture different events for delayed writes:
@@ -1257,6 +1263,7 @@ try_fsync:
         /* Let's try to get this data on the disk. To guarantee data safe when
          * the AOF fsync policy is 'always', we should exit if failed to fsync
          * AOF (see comment next to the exit(1) after write error above). */
+        // 执行同步
         if (redis_fsync(server.aof_fd) == -1) {
             serverLog(LL_WARNING,"Can't persist AOF for fsync error when the "
               "AOF fsync policy is 'always': %s. Exiting...", strerror(errno));
@@ -2449,12 +2456,17 @@ int rewriteAppendOnlyFileBackground(void) {
     /* We set aof_selected_db to -1 in order to force the next call to the
      * feedAppendOnlyFile() to issue a SELECT command. */
     server.aof_selected_db = -1;
+    // 刷新aof
     flushAppendOnlyFile(1);
+
+    // 打开新的
     if (openNewIncrAofForAppend() != C_OK) {
         server.aof_lastbgrewrite_status = C_ERR;
         return C_ERR;
     }
+    // 重写计数器加一
     server.stat_aof_rewrites++;
+    // fork子进程
     if ((childpid = redisFork(CHILD_TYPE_AOF)) == 0) {
         char tmpfile[256];
 

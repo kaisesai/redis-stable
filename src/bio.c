@@ -304,9 +304,10 @@ void *bioProcessBackgroundJobs(void *arg) {
 /* Return the number of pending jobs of the specified type. */
 unsigned long bioPendingJobsOfType(int type) {
     unsigned int worker = bio_job_to_worker[type];
-
+    // 线程锁
     pthread_mutex_lock(&bio_mutex[worker]);
     unsigned long val = bio_jobs_counter[type];
+    // 释放锁
     pthread_mutex_unlock(&bio_mutex[worker]);
 
     return val;

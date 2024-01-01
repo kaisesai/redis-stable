@@ -111,6 +111,7 @@ void sendChildInfoGeneric(childInfoType info_type, size_t keys, double progress,
 
     ssize_t wlen = sizeof(data);
 
+    // 写到子进程
     if (write(server.child_info_pipe[1], &data, wlen) != wlen) {
         /* Failed writing to parent, it could have been killed, exit. */
         serverLog(LL_WARNING,"Child failed reporting info to parent, exiting. %s", strerror(errno));
@@ -140,6 +141,7 @@ void updateChildInfo(childInfoType information_type, size_t cow, monotime cow_up
  * if complete data read into the buffer, 
  * data is stored into *buffer, and returns 1.
  * otherwise, the partial data is left in the buffer, waiting for the next read, and returns 0. */
+// 读取客户端信息
 int readChildInfo(childInfoType *information_type, size_t *cow, monotime *cow_updated, size_t *keys, double* progress) {
     /* We are using here a static buffer in combination with the server.child_info_nread to handle short reads */
     static child_info_data buffer;
@@ -148,6 +150,7 @@ int readChildInfo(childInfoType *information_type, size_t *cow, monotime *cow_up
     /* Do not overlap */
     if (server.child_info_nread == wlen) server.child_info_nread = 0;
 
+    // 读取数据
     int nread = read(server.child_info_pipe[0], (char *)&buffer + server.child_info_nread, wlen - server.child_info_nread);
     if (nread > 0) {
         server.child_info_nread += nread;
