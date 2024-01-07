@@ -76,6 +76,7 @@ typedef struct aeFileEvent {
     void *clientData;
 } aeFileEvent;
 
+// 时间事件
 /* Time event structure */
 typedef struct aeTimeEvent {
     long long id; /* time event identifier. */

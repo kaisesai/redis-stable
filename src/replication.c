@@ -3757,7 +3757,7 @@ void replicationCron(void) {
         !(server.master->flags & CLIENT_PRE_PSYNC))
         replicationSendAck();
 
-    /* If we have attached slaves, PING them from time to time.
+    /* If we have attached slaves, PING them from time to time. 不断地向master发送ack
      * So slaves can implement an explicit timeout to masters, and will
      * be able to detect a link disconnection even if the TCP connection
      * will not actually go down. */

@@ -27,8 +27,10 @@
 #include "server.h"
 #include "connection.h"
 
+// 常量连接类型
 static ConnectionType *connTypes[CONN_TYPE_MAX];
 
+// 注册连接器
 int connTypeRegister(ConnectionType *ct) {
     const char *typename = ct->get_type(NULL);
     ConnectionType *tmpct;
@@ -57,6 +59,7 @@ int connTypeRegister(ConnectionType *ct) {
     return C_OK;
 }
 
+// 初始化连接类型：socket、unit、tls
 int connTypeInitialize(void) {
     /* currently socket connection type is necessary  */
     serverAssert(RedisRegisterConnectionTypeSocket() == C_OK);

@@ -9376,22 +9376,32 @@ int RM_EventLoopAddOneShot(RedisModuleEventLoopOneShotFunc func, void *user_data
 
 /* This function will check the moduleEventLoopOneShots queue in order to
  * call the callback for the registered oneshot events. */
+// 检查队列注册的回调事件
 static void eventLoopHandleOneShotEvents(void) {
+    // 线程锁
     pthread_mutex_lock(&moduleEventLoopMutex);
     if (moduleEventLoopOneShots) {
         while (listLength(moduleEventLoopOneShots)) {
+            // 获取队列第一个元素
             listNode *ln = listFirst(moduleEventLoopOneShots);
+            // 事件
             EventLoopOneShot *oneshot = ln->value;
+            // 删除元素
             listDelNode(moduleEventLoopOneShots, ln);
             /* Unlock mutex before the callback. Another oneshot event can be
              * added in the callback, it will need to lock the mutex. */
+            // 释放锁
             pthread_mutex_unlock(&moduleEventLoopMutex);
+            // 执行函数
             oneshot->func(oneshot->user_data);
+            // 释放空间
             zfree(oneshot);
             /* Lock again for the next iteration */
+            // 线程加锁
             pthread_mutex_lock(&moduleEventLoopMutex);
         }
     }
+    // 线程解锁
     pthread_mutex_unlock(&moduleEventLoopMutex);
 }
 
@@ -11606,6 +11616,7 @@ typedef struct KeyInfo {
  *
  * 'eid' and 'subid' are just the main event ID and the sub event associated
  * with the event, depending on what exactly happened. */
+// 模块触发服务事件
 void moduleFireServerEvent(uint64_t eid, int subid, void *data) {
     /* Fast path to return ASAP if there is nothing to do, avoiding to
      * setup the iterator and so forth: we want this call to be extremely
@@ -11616,6 +11627,7 @@ void moduleFireServerEvent(uint64_t eid, int subid, void *data) {
     listNode *ln;
     listRewind(RedisModule_EventListeners,&li);
     while((ln = listNext(&li))) {
+        // redis模块时间监听器
         RedisModuleEventListener *el = ln->value;
         if (el->event.id == eid) {
             RedisModuleCtx ctx;
@@ -12289,6 +12301,7 @@ int moduleUnload(sds name, const char **errmsg) {
     return C_OK;
 }
 
+// 模块管道可读方法
 void modulePipeReadable(aeEventLoop *el, int fd, void *privdata, int mask) {
     UNUSED(el);
     UNUSED(fd);
@@ -12296,9 +12309,11 @@ void modulePipeReadable(aeEventLoop *el, int fd, void *privdata, int mask) {
     UNUSED(privdata);
 
     char buf[128];
+    // 读取数据
     while (read(fd, buf, sizeof(buf)) == sizeof(buf));
 
     /* Handle event loop events if pipe was written from event loop API */
+    // 处理事件
     eventLoopHandleOneShotEvents();
 }
 

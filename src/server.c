@@ -978,6 +978,8 @@ void getExpansiveClientsInfo(size_t *in_usage, size_t *out_usage) {
  * of clients per second, turning this function into a source of latency.
  */
 #define CLIENTS_CRON_MIN_ITERATIONS 5
+
+// 客户端连接
 void clientsCron(void) {
     /* Try to process at least numclients/server.hz of clients
      * per call. Since normally (if there are no big latency events) this
@@ -1259,6 +1261,7 @@ void cronUpdateMemoryStats(void) {
  * a macro is used: run_with_period(milliseconds) { .... }
  */
 
+// 服务定时调度
 int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
     int j;
     UNUSED(eventLoop);
@@ -1345,6 +1348,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
         if (prepareForShutdown(shutdownFlags) == C_OK) exit(0);
     } else if (isShutdownInitiated()) {
         if (server.mstime >= server.shutdown_mstime || isReadyToShutdown()) {
+            // 完成停机
             if (finishShutdown() == C_OK) exit(0);
             /* Shutdown failed. Continue running. An error has been logged. */
         }
@@ -1483,6 +1487,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
      * 
      * If Redis is trying to failover then run the replication cron faster so
      * progress on the handshake happens more quickly. */
+    // 复制克隆函数，向master请求克隆数据（from rdb）
     if (server.failover_state != NO_FAILOVER) {
         run_with_period(100) replicationCron();
     } else {
@@ -1504,6 +1509,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
     }
 
     /* Stop the I/O threads if we don't have enough pending work. */
+    // 停止IO线程
     stopThreadedIOIfNeeded();
 
     /* Resize tracking keys table if needed. This is also done at every
@@ -1643,6 +1649,7 @@ extern int ProcessingEventsWhileBlocked;
  *
  * The most important is freeClientsInAsyncFreeQueue but we also
  * call some other low-risk functions. */
+// 前置sleep函数
 void beforeSleep(struct aeEventLoop *eventLoop) {
     UNUSED(eventLoop);
 
@@ -1657,11 +1664,16 @@ void beforeSleep(struct aeEventLoop *eventLoop) {
      * events to handle. */
     if (ProcessingEventsWhileBlocked) {
         uint64_t processed = 0;
+        // 处理客户端待处理事件
         processed += handleClientsWithPendingReadsUsingThreads();
+        // 处理待处理数据
         processed += connTypeProcessPendingData();
         if (server.aof_state == AOF_ON || server.aof_state == AOF_WAIT_REWRITE)
+            // 刷新AOF文件
             flushAppendOnlyFile(0);
+        // 处理客户端写
         processed += handleClientsWithPendingWrites();
+        // 释放客户端空闲队列
         processed += freeClientsInAsyncFreeQueue();
         server.events_processed_while_blocked += processed;
         return;
@@ -1803,6 +1815,7 @@ void beforeSleep(struct aeEventLoop *eventLoop) {
 /* This function is called immediately after the event loop multiplexing
  * API returned, and the control is going to soon return to Redis by invoking
  * the different events callbacks. */
+// 后置函数
 void afterSleep(struct aeEventLoop *eventLoop) {
     UNUSED(eventLoop);
     /********************* WARNING ********************
@@ -2434,6 +2447,7 @@ void closeListener(connListener *sfd) {
 
 /* Create an event handler for accepting new connections in TCP or TLS domain sockets.
  * This works atomically for all socket fds */
+// 创建socket接收器
 int createSocketAcceptHandler(connListener *sfd, aeFileProc *accept_handler) {
     int j;
 
@@ -2441,6 +2455,7 @@ int createSocketAcceptHandler(connListener *sfd, aeFileProc *accept_handler) {
         // 创建文件事件
         if (aeCreateFileEvent(server.el, sfd->fd[j], AE_READABLE, accept_handler,sfd) == AE_ERR) {
             /* Rollback */
+            // 删除文件事件
             for (j = j-1; j >= 0; j--) aeDeleteFileEvent(server.el, sfd->fd[j], AE_READABLE);
             return C_ERR;
         }
@@ -2467,6 +2482,7 @@ int createSocketAcceptHandler(connListener *sfd, aeFileProc *accept_handler) {
  * impossible to bind, or no bind addresses were specified in the server
  * configuration but the function is not able to bind * for at least
  * one of the IPv4 or IPv6 protocols. */
+// 监听端口
 int listenToPort(connListener *sfd) {
     int j;
     int port = sfd->port;
@@ -2812,9 +2828,12 @@ void initListeners(void) {
         if (conn_index < 0)
             serverPanic("Failed finding connection listener of %s", CONN_TYPE_SOCKET);
         listener = &server.listeners[conn_index];
+        // 绑定地址
         listener->bindaddr = server.bindaddr;
         listener->bindaddr_count = server.bindaddr_count;
+        // 端口
         listener->port = server.port;
+        // 连接类型
         listener->ct = connectionByType(CONN_TYPE_SOCKET);
     }
 
@@ -2845,6 +2864,7 @@ void initListeners(void) {
         conn_index = connectionIndexByType(CONN_TYPE_UNIX);
         if (conn_index < 0)
             serverPanic("Failed finding connection listener of %s", CONN_TYPE_UNIX);
+        // 监听器？
         listener = &server.listeners[conn_index];
         listener->bindaddr = &server.unixsocket;
         listener->bindaddr_count = 1;
@@ -2854,6 +2874,7 @@ void initListeners(void) {
 
     /* create all the configured listener, and add handler to start to accept */
     int listen_fds = 0;
+    // 8个监听器？
     for (int j = 0; j < CONN_TYPE_MAX; j++) {
         listener = &server.listeners[j];
         if (listener->ct == NULL)
@@ -3204,6 +3225,7 @@ struct redisCommand *lookupCommandLogic(dict *commands, robj **argv, int argc, i
     }
 }
 
+// 定位命令
 struct redisCommand *lookupCommand(robj **argv, int argc) {
     return lookupCommandLogic(server.commands,argv,argc,0);
 }
@@ -3528,6 +3550,7 @@ int incrCommandStatsOnError(struct redisCommand *cmd, int flags) {
  * preventCommandReplication(client *c);
  *
  */
+// 执行命令
 void call(client *c, int flags) {
     long long dirty;
     uint64_t client_old_flags = c->flags;
@@ -3574,6 +3597,7 @@ void call(client *c, int flags) {
     if (monotonicGetType() == MONOTONIC_CLOCK_HW)
         monotonic_start = getMonotonicUs();
 
+    // 执行函数
     c->cmd->proc(c);
 
     exitExecutionUnit();
@@ -3732,6 +3756,7 @@ void call(client *c, int flags) {
     if (zmalloc_used > server.stat_peak_memory)
         server.stat_peak_memory = zmalloc_used;
 
+    // 执行命令之后
     /* Do some maintenance job and cleanup */
     afterCommand(c);
 
@@ -3862,10 +3887,12 @@ uint64_t getCommandFlags(client *c) {
     uint64_t cmd_flags = c->cmd->flags;
 
     if (c->cmd->proc == fcallCommand || c->cmd->proc == fcallroCommand) {
+        // 
         cmd_flags = fcallGetCommandFlags(c, cmd_flags);
     } else if (c->cmd->proc == evalCommand || c->cmd->proc == evalRoCommand ||
                c->cmd->proc == evalShaCommand || c->cmd->proc == evalShaRoCommand)
     {
+        // 解析命令
         cmd_flags = evalGetCommandFlags(c, cmd_flags);
     }
 
@@ -3880,6 +3907,7 @@ uint64_t getCommandFlags(client *c) {
  * If C_OK is returned the client is still alive and valid and
  * other operations can be performed by the caller. Otherwise
  * if C_ERR is returned the client was destroyed (i.e. after QUIT). */
+// 处理命令
 int processCommand(client *c) {
     if (!scriptIsTimedout()) {
         /* Both EXEC and scripts call call() directly so there should be
@@ -3920,6 +3948,7 @@ int processCommand(client *c) {
      * In case we are reprocessing a command after it was blocked,
      * we do not have to repeat the same checks */
     if (!client_reprocessing_command) {
+        // 寻找命令，
         c->cmd = c->lastcmd = c->realcmd = lookupCommand(c->argv,c->argc);
         sds err;
         if (!commandCheckExistence(c, &err)) {
@@ -3948,10 +3977,13 @@ int processCommand(client *c) {
         }
     }
 
+    // 获取命令标识
     uint64_t cmd_flags = getCommandFlags(c);
 
+    // 读命令
     int is_read_command = (cmd_flags & CMD_READONLY) ||
                            (c->cmd->proc == execCommand && (c->mstate.cmd_flags & CMD_READONLY));
+    // 写命令
     int is_write_command = (cmd_flags & CMD_WRITE) ||
                            (c->cmd->proc == execCommand && (c->mstate.cmd_flags & CMD_WRITE));
     int is_denyoom_command = (cmd_flags & CMD_DENYOOM) ||
@@ -4201,6 +4233,7 @@ int processCommand(client *c) {
         return C_OK;       
     }
 
+    // 执行命令
     /* Exec the command */
     if (c->flags & CLIENT_MULTI &&
         c->cmd->proc != execCommand &&
@@ -4210,11 +4243,14 @@ int processCommand(client *c) {
         c->cmd->proc != quitCommand &&
         c->cmd->proc != resetCommand)
     {
+        // 队列多命令
         queueMultiCommand(c, cmd_flags);
+        // 
         addReply(c,shared.queued);
     } else {
         int flags = CMD_CALL_FULL;
         if (client_reprocessing_command) flags |= CMD_CALL_REPROCESSING;
+        // 调用执行命令
         call(c,flags);
         if (listLength(server.ready_keys) && !isInsideYieldingLongCommand())
             handleClientsBlockedOnKeys();
@@ -7175,6 +7211,7 @@ int main(int argc, char **argv) {
     ACLInit(); /* The ACL subsystem must be initialized ASAP because the
                   basic networking code and client creation depends on it. */
     moduleInitModulesSystem();
+    // 初始化连接类型
     connTypeInitialize();
 
     /* Store the executable path and arguments in a safe place in order

@@ -141,7 +141,7 @@ void updateChildInfo(childInfoType information_type, size_t cow, monotime cow_up
  * if complete data read into the buffer, 
  * data is stored into *buffer, and returns 1.
  * otherwise, the partial data is left in the buffer, waiting for the next read, and returns 0. */
-// 读取客户端信息
+// 从管道读取子进程信息
 int readChildInfo(childInfoType *information_type, size_t *cow, monotime *cow_updated, size_t *keys, double* progress) {
     /* We are using here a static buffer in combination with the server.child_info_nread to handle short reads */
     static child_info_data buffer;
@@ -169,6 +169,7 @@ int readChildInfo(childInfoType *information_type, size_t *cow, monotime *cow_up
     }
 }
 
+// 从子进程接受数据
 /* Receive info data from child. */
 void receiveChildInfo(void) {
     if (server.child_info_pipe[0] == -1) return;
@@ -180,7 +181,9 @@ void receiveChildInfo(void) {
     childInfoType information_type;
 
     /* Drain the pipe and update child info so that we get the final message. */
+    // 读取子进程数据（通过管道）
     while (readChildInfo(&information_type, &cow, &cow_updated, &keys, &progress)) {
+        // 更新子进程信息
         updateChildInfo(information_type, cow, cow_updated, keys, progress);
     }
 }

@@ -792,7 +792,9 @@ static int connTLSIsLocal(connection *conn) {
     return connectionTypeTcp()->is_local(conn);
 }
 
+// 连接TLS监听
 static int connTLSListen(connListener *listener) {
+    // 监听端口
     return listenToPort(listener);
 }
 

@@ -73,7 +73,7 @@ static ConnectionType CT_Socket;
  * 3. The container_of() approach is anyway risky because connections may
  * be embedded in different structs, not just client.
  */
-
+// 
 static connection *connCreateSocket(void) {
     connection *conn = zcalloc(sizeof(connection));
     // 定义一个 监听 socket
@@ -94,8 +94,10 @@ static connection *connCreateSocket(void) {
  * is not in an error state (which is not possible for a socket connection,
  * but could but possible with other protocols).
  */
+// 创建一个连接
 static connection *connCreateAcceptedSocket(int fd, void *priv) {
     UNUSED(priv);
+    // 创建一个socket连接
     connection *conn = connCreateSocket();
     conn->fd = fd;
     conn->state = CONN_STATE_ACCEPTING;
@@ -255,6 +257,7 @@ static const char *connSocketGetLastError(connection *conn) {
     return strerror(conn->last_errno);
 }
 
+// 连接事件处理器
 static void connSocketEventHandler(struct aeEventLoop *el, int fd, void *clientData, int mask)
 {
     UNUSED(el);
@@ -296,10 +299,12 @@ static void connSocketEventHandler(struct aeEventLoop *el, int fd, void *clientD
 
     /* Handle normal I/O flows */
     if (!invert && call_read) {
+        // 读处理器
         if (!callHandler(conn, conn->read_handler)) return;
     }
     /* Fire the writable event. */
     if (call_write) {
+        // 写处理器
         if (!callHandler(conn, conn->write_handler)) return;
     }
     /* If we have to invert the call, fire the readable event now
@@ -309,6 +314,7 @@ static void connSocketEventHandler(struct aeEventLoop *el, int fd, void *clientD
     }
 }
 
+// 连接接收处理器
 static void connSocketAcceptHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
     int cport, cfd, max = MAX_ACCEPTS_PER_CALL;
     char cip[NET_IP_STR_LEN];
@@ -317,6 +323,7 @@ static void connSocketAcceptHandler(aeEventLoop *el, int fd, void *privdata, int
     UNUSED(privdata);
 
     while(max--) {
+        // 接收
         cfd = anetTcpAccept(server.neterr, fd, cip, sizeof(cip), &cport);
         if (cfd == ANET_ERR) {
             if (errno != EWOULDBLOCK)
@@ -325,6 +332,7 @@ static void connSocketAcceptHandler(aeEventLoop *el, int fd, void *privdata, int
             return;
         }
         serverLog(LL_VERBOSE,"Accepted %s:%d", cip, cport);
+        // 接收命令处理器，入参为创建已接收的socket
         acceptCommonHandler(connCreateAcceptedSocket(cfd, NULL),0,cip);
     }
 }
@@ -403,8 +411,8 @@ static ConnectionType CT_Socket = {
     .configure = NULL,
 
     /* ae & accept & listen & error & address handler */
-    .ae_handler = connSocketEventHandler,
-    .accept_handler = connSocketAcceptHandler,
+    .ae_handler = connSocketEventHandler,// 事件处理器
+    .accept_handler = connSocketAcceptHandler,// 接收处理器
     .addr = connSocketAddr,
     .is_local = connSocketIsLocal,
     // 监听函数

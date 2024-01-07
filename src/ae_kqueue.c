@@ -107,11 +107,13 @@ static void aeApiFree(aeEventLoop *eventLoop) {
 
 // 添加事件
 static int aeApiAddEvent(aeEventLoop *eventLoop, int fd, int mask) {
+    // 事件循环器的 apidata
     aeApiState *state = eventLoop->apidata;
     struct kevent ke;
 
     if (mask & AE_READABLE) {
         EV_SET(&ke, fd, EVFILT_READ, EV_ADD, 0, 0, NULL);
+        // 添加事件
         if (kevent(state->kqfd, &ke, 1, NULL, 0, NULL) == -1) return -1;
     }
     if (mask & AE_WRITABLE) {
@@ -135,6 +137,7 @@ static void aeApiDelEvent(aeEventLoop *eventLoop, int fd, int mask) {
     }
 }
 
+// 获取事件
 static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
     aeApiState *state = eventLoop->apidata;
     int retval, numevents = 0;
@@ -161,6 +164,7 @@ static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
          * reads and writes. So we store the event's mask we've got and merge
          * the same fd events later. */
         for (j = 0; j < retval; j++) {
+            // 事件函数
             struct kevent *e = state->events+j;
             int fd = e->ident;
             int mask = 0; 
@@ -179,6 +183,7 @@ static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
             int mask = getEventMask(state->eventsMask, fd);
 
             if (mask) {
+                // 添加触发事件
                 eventLoop->fired[numevents].fd = fd;
                 eventLoop->fired[numevents].mask = mask;
                 resetEventMask(state->eventsMask, fd);

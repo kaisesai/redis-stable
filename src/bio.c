@@ -115,6 +115,7 @@ void *bioProcessBackgroundJobs(void *arg);
  * main thread. */
 #define REDIS_THREAD_STACK_SIZE (1024*1024*4)
 
+// 初始化后台线程
 /* Initialize the background system, spawning the thread. */
 void bioInit(void) {
     pthread_attr_t attr;
@@ -204,6 +205,7 @@ void bioCreateFsyncJob(int fd, long long offset, int need_reclaim_cache) {
     bioSubmitJob(BIO_AOF_FSYNC, job);
 }
 
+// 后台线程工作
 void *bioProcessBackgroundJobs(void *arg) {
     bio_job *job;
     unsigned long worker = (unsigned long) arg;
@@ -218,6 +220,7 @@ void *bioProcessBackgroundJobs(void *arg) {
 
     makeThreadKillable();
 
+    // 加锁
     pthread_mutex_lock(&bio_mutex[worker]);
     /* Block SIGALRM so we are sure that only the main thread will
      * receive the watchdog signal. */
@@ -227,25 +230,32 @@ void *bioProcessBackgroundJobs(void *arg) {
         serverLog(LL_WARNING,
             "Warning: can't mask SIGALRM in bio.c thread: %s", strerror(errno));
 
+    // 无线循环处理
     while(1) {
         listNode *ln;
 
         /* The loop always starts with the lock hold. */
         if (listLength(bio_jobs[worker]) == 0) {
+            // 等待
             pthread_cond_wait(&bio_newjob_cond[worker], &bio_mutex[worker]);
             continue;
         }
+
+        // 获取任务
         /* Get the job from the queue. */
         ln = listFirst(bio_jobs[worker]);
+        // 获取到任务
         job = ln->value;
         /* It is now possible to unlock the background system as we know have
          * a stand alone job structure to process.*/
+        // 解锁
         pthread_mutex_unlock(&bio_mutex[worker]);
 
         /* Process the job accordingly to its type. */
         int job_type = job->header.type;
 
         if (job_type == BIO_CLOSE_FILE) {
+            // 关闭文件
             if (job->fd_args.need_fsync &&
                 redis_fsync(job->fd_args.fd) == -1 &&
                 errno != EBADF && errno != EINVAL)
@@ -253,15 +263,19 @@ void *bioProcessBackgroundJobs(void *arg) {
                 serverLog(LL_WARNING, "Fail to fsync the AOF file: %s",strerror(errno));
             }
             if (job->fd_args.need_reclaim_cache) {
+                // 从文件page缓存上读取
                 if (reclaimFilePageCache(job->fd_args.fd, 0, 0) == -1) {
                     serverLog(LL_NOTICE,"Unable to reclaim page cache: %s", strerror(errno));
                 }
             }
             close(job->fd_args.fd);
         } else if (job_type == BIO_AOF_FSYNC || job_type == BIO_CLOSE_AOF) {
+            // 异步刷新、关闭AOF
+
             /* The fd may be closed by main thread and reused for another
              * socket, pipe, or file. We just ignore these errno because
              * aof fsync did not really fail. */
+            // 刷新磁盘
             if (redis_fsync(job->fd_args.fd) == -1 &&
                 errno != EBADF && errno != EINVAL)
             {
@@ -279,6 +293,7 @@ void *bioProcessBackgroundJobs(void *arg) {
             }
 
             if (job->fd_args.need_reclaim_cache) {
+                // 缓存操作
                 if (reclaimFilePageCache(job->fd_args.fd, 0, 0) == -1) {
                     serverLog(LL_NOTICE,"Unable to reclaim page cache: %s", strerror(errno));
                 }
@@ -286,17 +301,23 @@ void *bioProcessBackgroundJobs(void *arg) {
             if (job_type == BIO_CLOSE_AOF)
                 close(job->fd_args.fd);
         } else if (job_type == BIO_LAZY_FREE) {
+            // 空间回收
             job->free_args.free_fn(job->free_args.free_args);
         } else {
+            // 其他类型，错误
             serverPanic("Wrong job type in bioProcessBackgroundJobs().");
         }
         zfree(job);
 
         /* Lock again before reiterating the loop, if there are no longer
          * jobs to process we'll block again in pthread_cond_wait(). */
+        // 释放锁
         pthread_mutex_lock(&bio_mutex[worker]);
+        // 删除数据
         listDelNode(bio_jobs[worker], ln);
+        // 更新任务数量
         bio_jobs_counter[job_type]--;
+        // 通知其他线程抢锁
         pthread_cond_signal(&bio_newjob_cond[worker]);
     }
 }

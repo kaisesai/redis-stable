@@ -120,9 +120,9 @@ struct connection {
     short int refs;
     unsigned short int iovcnt;
     void *private_data;
-    ConnectionCallbackFunc conn_handler;
-    ConnectionCallbackFunc write_handler;
-    ConnectionCallbackFunc read_handler;
+    ConnectionCallbackFunc conn_handler;// 连接处理器
+    ConnectionCallbackFunc write_handler;// 写处理器
+    ConnectionCallbackFunc read_handler;// 读处理器
 };
 
 #define CONFIG_BINDADDR_MAX 16
@@ -157,6 +157,7 @@ struct connListener {
  */
 
 static inline int connAccept(connection *conn, ConnectionCallbackFunc accept_handler) {
+    // 连接接收处理命令
     return conn->type->accept(conn, accept_handler);
 }
 
